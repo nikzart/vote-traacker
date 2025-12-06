@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   Search,
   Phone,
@@ -62,6 +62,14 @@ export default function VoterEntry() {
   })
   const [groupDialogVoter, setGroupDialogVoter] = useState<Voter | null>(null)
 
+  // Pagination state
+  const [page, setPage] = useState(0)
+  const [hasMore, setHasMore] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [totalCount, setTotalCount] = useState<number | null>(null)
+  const PAGE_SIZE = 50
+  const sentinelRef = useRef<HTMLDivElement>(null)
+
   // Load polling stations
   useEffect(() => {
     if (!portalSession) return
@@ -85,13 +93,15 @@ export default function VoterEntry() {
     if (!selectedStation) return
 
     setLoading(true)
+    setPage(0)
+    setHasMore(true)
     try {
       let query = supabase
         .from('voters')
-        .select('*')
+        .select('*', { count: 'exact' })
         .eq('polling_station_id', selectedStation)
         .order('serial_no')
-        .limit(50)
+        .range(0, PAGE_SIZE - 1)
 
       if (searchQuery) {
         const serialNo = parseInt(searchQuery)
@@ -111,10 +121,12 @@ export default function VoterEntry() {
         query = query.eq('political_leaning', filters.politicalLeaning)
       }
 
-      const { data, error } = await query
+      const { data, error, count } = await query
 
       if (error) throw error
       setVoters(data || [])
+      setTotalCount(count)
+      setHasMore((data?.length || 0) >= PAGE_SIZE && (count || 0) > PAGE_SIZE)
     } catch (error) {
       console.error('Search error:', error)
       showToast('error', 'Failed to search voters')
@@ -129,6 +141,72 @@ export default function VoterEntry() {
     }, 300)
     return () => clearTimeout(debounce)
   }, [searchVoters])
+
+  // Load more voters (pagination)
+  const loadMoreVoters = useCallback(async () => {
+    if (!selectedStation || loadingMore || !hasMore) return
+
+    setLoadingMore(true)
+    const nextPage = page + 1
+    const offset = nextPage * PAGE_SIZE
+
+    try {
+      let query = supabase
+        .from('voters')
+        .select('*')
+        .eq('polling_station_id', selectedStation)
+        .order('serial_no')
+        .range(offset, offset + PAGE_SIZE - 1)
+
+      if (searchQuery) {
+        const serialNo = parseInt(searchQuery)
+        if (!isNaN(serialNo)) {
+          query = query.eq('serial_no', serialNo)
+        }
+      }
+
+      if (filters.hasVoted === 'yes') {
+        query = query.eq('has_voted', true)
+      } else if (filters.hasVoted === 'no') {
+        query = query.eq('has_voted', false)
+      }
+
+      if (filters.politicalLeaning) {
+        query = query.eq('political_leaning', filters.politicalLeaning)
+      }
+
+      const { data, error } = await query
+
+      if (error) throw error
+
+      if (data && data.length > 0) {
+        setVoters(prev => [...prev, ...data])
+        setPage(nextPage)
+        setHasMore(data.length >= PAGE_SIZE)
+      } else {
+        setHasMore(false)
+      }
+    } catch (error) {
+      console.error('Load more error:', error)
+      showToast('error', 'Failed to load more voters')
+    } finally {
+      setLoadingMore(false)
+    }
+  }, [selectedStation, searchQuery, filters, page, loadingMore, hasMore, showToast])
+
+  // Infinite scroll observer
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loadingMore && !loading) {
+          loadMoreVoters()
+        }
+      },
+      { rootMargin: '100px', threshold: 0.1 }
+    )
+    if (sentinelRef.current) observer.observe(sentinelRef.current)
+    return () => observer.disconnect()
+  }, [hasMore, loadingMore, loading, loadMoreVoters])
 
   // Realtime subscription
   useEffect(() => {
@@ -368,6 +446,23 @@ export default function VoterEntry() {
               </CardContent>
             </Card>
           ))}
+
+          {/* Sentinel for infinite scroll */}
+          <div ref={sentinelRef} className="h-1" />
+
+          {/* Loading more indicator */}
+          {loadingMore && (
+            <div className="flex items-center justify-center py-4">
+              <Loader2 className="h-6 w-6 animate-spin" />
+            </div>
+          )}
+
+          {/* End of list indicator */}
+          {!hasMore && voters.length > 0 && (
+            <p className="text-center py-4 text-sm text-muted-foreground">
+              All {totalCount} voters loaded
+            </p>
+          )}
         </div>
       )}
 
