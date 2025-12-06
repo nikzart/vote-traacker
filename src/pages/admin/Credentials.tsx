@@ -53,6 +53,7 @@ export default function Credentials() {
   const [selectedWard, setSelectedWard] = useState('')
   const [selectedPollingStation, setSelectedPollingStation] = useState('')
   const [isMaster, setIsMaster] = useState(false)
+  const [isViewOnly, setIsViewOnly] = useState(false)
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
 
@@ -101,6 +102,7 @@ export default function Credentials() {
     setSelectedWard('')
     setSelectedPollingStation('')
     setIsMaster(false)
+    setIsViewOnly(false)
     setUsername('')
     setPassword(generateRandomPassword())
     setDialogOpen(true)
@@ -119,6 +121,7 @@ export default function Credentials() {
         username,
         password_hash: password, // In production, hash this
         is_master: isMaster,
+        is_view_only: isViewOnly,
         is_active: true,
       })
 
@@ -141,6 +144,19 @@ export default function Credentials() {
 
     if (error) {
       showToast('error', 'Failed to update status')
+    } else {
+      loadCredentials()
+    }
+  }
+
+  const toggleViewOnly = async (id: string, currentViewOnly: boolean) => {
+    const { error } = await supabase
+      .from('ward_credentials')
+      .update({ is_view_only: !currentViewOnly })
+      .eq('id', id)
+
+    if (error) {
+      showToast('error', 'Failed to update view-only status')
     } else {
       loadCredentials()
     }
@@ -289,7 +305,13 @@ export default function Credentials() {
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {cred.is_view_only && (
+                          <Badge variant="outline" className="text-yellow-600 border-yellow-400">
+                            <Eye className="h-3 w-3 mr-1" />
+                            View Only
+                          </Badge>
+                        )}
                         <Badge variant={cred.is_active ? 'default' : 'secondary'}>
                           {cred.is_active ? 'Active' : 'Inactive'}
                         </Badge>
@@ -297,6 +319,15 @@ export default function Credentials() {
                           checked={cred.is_active}
                           onCheckedChange={() => toggleActive(cred.id, cred.is_active)}
                         />
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => toggleViewOnly(cred.id, cred.is_view_only)}
+                          title={cred.is_view_only ? 'Remove view-only' : 'Make view-only'}
+                          className={cred.is_view_only ? 'text-yellow-600' : ''}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
                         <Button
                           variant="ghost"
                           size="icon"
@@ -389,6 +420,11 @@ export default function Credentials() {
             <div className="flex items-center gap-2">
               <Switch checked={isMaster} onCheckedChange={setIsMaster} />
               <Label>Master credential (full ward access)</Label>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Switch checked={isViewOnly} onCheckedChange={setIsViewOnly} />
+              <Label>View only (read-only access)</Label>
             </div>
 
             {!isMaster && (

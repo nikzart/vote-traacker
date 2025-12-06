@@ -10,6 +10,7 @@ import {
   X,
   Check,
   Save,
+  Users,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -22,6 +23,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from '@/components/ui/dialog'
 import {
   Select,
@@ -34,27 +36,31 @@ import { supabase, getPollingStations, updateVoter } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/authStore'
 import { useUIStore } from '@/stores/uiStore'
 import { cn, getPoliticalLeaningBadgeClasses } from '@/lib/utils'
+import AddToGroupDialog from '@/components/portal/AddToGroupDialog'
 import type { Voter, PollingStation, PoliticalLeaning } from '@/types'
 
+// Voter entry component with call button and vote toggle
 export default function VoterEntry() {
   const { portalSession } = useAuthStore()
   const { showToast } = useUIStore()
+  const isViewOnly = portalSession?.is_view_only ?? false
 
   const [pollingStations, setPollingStations] = useState<PollingStation[]>([])
   const [selectedStation, setSelectedStation] = useState<string>('')
   const [voters, setVoters] = useState<Voter[]>([])
   const [loading, setLoading] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
-  const [searchType, setSearchType] = useState<'serial' | 'name'>('serial')
   const [selectedVoter, setSelectedVoter] = useState<Voter | null>(null)
   const [editedVoter, setEditedVoter] = useState<Partial<Voter>>({})
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [filterOpen, setFilterOpen] = useState(false)
+  const [voteConfirmVoter, setVoteConfirmVoter] = useState<Voter | null>(null)
   const [filters, setFilters] = useState({
     hasVoted: '' as '' | 'yes' | 'no',
     politicalLeaning: '' as PoliticalLeaning | '',
   })
+  const [groupDialogVoter, setGroupDialogVoter] = useState<Voter | null>(null)
 
   // Load polling stations
   useEffect(() => {
@@ -88,13 +94,9 @@ export default function VoterEntry() {
         .limit(50)
 
       if (searchQuery) {
-        if (searchType === 'serial') {
-          const serialNo = parseInt(searchQuery)
-          if (!isNaN(serialNo)) {
-            query = query.eq('serial_no', serialNo)
-          }
-        } else {
-          query = query.ilike('name', `%${searchQuery}%`)
+        const serialNo = parseInt(searchQuery)
+        if (!isNaN(serialNo)) {
+          query = query.eq('serial_no', serialNo)
         }
       }
 
@@ -119,7 +121,7 @@ export default function VoterEntry() {
     } finally {
       setLoading(false)
     }
-  }, [selectedStation, searchQuery, searchType, filters, showToast])
+  }, [selectedStation, searchQuery, filters, showToast])
 
   useEffect(() => {
     const debounce = setTimeout(() => {
@@ -214,12 +216,20 @@ export default function VoterEntry() {
     }
   }
 
-  const handleQuickVote = async (voter: Voter, e: React.MouseEvent) => {
+  const handleQuickVote = (voter: Voter, e: React.MouseEvent) => {
     e.stopPropagation()
+    setVoteConfirmVoter(voter)
+  }
+
+  const confirmVote = async () => {
+    if (!voteConfirmVoter) return
     try {
-      await updateVoter(voter.id, { has_voted: !voter.has_voted })
+      await updateVoter(voteConfirmVoter.id, { has_voted: true })
+      showToast('success', 'Marked as voted')
     } catch {
       showToast('error', 'Failed to update')
+    } finally {
+      setVoteConfirmVoter(null)
     }
   }
 
@@ -243,37 +253,32 @@ export default function VoterEntry() {
         </Select>
       )}
 
-      {/* Search Bar */}
-      <div className="flex gap-2">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-          <Input
-            type={searchType === 'serial' ? 'number' : 'text'}
-            placeholder={searchType === 'serial' ? 'Serial No.' : 'Search by name...'}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10 h-12 text-lg"
-          />
+      {/* Search Bar - Sticky */}
+      <div className="sticky top-14 z-30 bg-gray-50 py-2 -mx-4 px-4">
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+            <Input
+              type="number"
+              placeholder="Serial No."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10 h-12 text-lg"
+            />
+          </div>
+          <Button
+            variant="outline"
+            className={cn("h-12 w-12 relative", activeFiltersCount > 0 && "text-primary")}
+            onClick={() => setFilterOpen(true)}
+          >
+            <Filter className="h-5 w-5" />
+            {activeFiltersCount > 0 && (
+              <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center">
+                {activeFiltersCount}
+              </span>
+            )}
+          </Button>
         </div>
-        <Button
-          variant="outline"
-          className="h-12 w-12"
-          onClick={() => setSearchType(searchType === 'serial' ? 'name' : 'serial')}
-        >
-          {searchType === 'serial' ? '#' : 'Aa'}
-        </Button>
-        <Button
-          variant="outline"
-          className={cn("h-12 w-12 relative", activeFiltersCount > 0 && "text-primary")}
-          onClick={() => setFilterOpen(true)}
-        >
-          <Filter className="h-5 w-5" />
-          {activeFiltersCount > 0 && (
-            <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center">
-              {activeFiltersCount}
-            </span>
-          )}
-        </Button>
       </div>
 
       {/* Voter List */}
@@ -294,7 +299,8 @@ export default function VoterEntry() {
               key={voter.id}
               onClick={() => handleVoterClick(voter)}
               className={cn(
-                "cursor-pointer transition-all active:scale-[0.98]",
+                "transition-all",
+                !isViewOnly && "cursor-pointer active:scale-[0.98]",
                 voter.has_voted && "bg-green-50 border-green-200",
                 voter.is_deceased && "opacity-50"
               )}
@@ -333,21 +339,31 @@ export default function VoterEntry() {
                           <Skull className="h-3 w-3 mr-1" /> മരണപ്പെട്ടു
                         </Badge>
                       )}
-                      {voter.mobile_number && (
-                        <Badge variant="secondary" className="text-xs">
-                          <Phone className="h-3 w-3 mr-1" /> Has Phone
-                        </Badge>
-                      )}
                     </div>
                   </div>
-                  <Button
-                    variant={voter.has_voted ? 'success' : 'outline'}
-                    size="lg"
-                    className="h-14 w-14 flex-shrink-0"
-                    onClick={(e) => handleQuickVote(voter, e)}
-                  >
-                    <CheckCircle className={cn("h-6 w-6", voter.has_voted && "fill-current")} />
-                  </Button>
+                  <div className="flex gap-2 flex-shrink-0">
+                    {voter.mobile_number && (
+                      <button
+                        type="button"
+                        className="h-12 w-12 rounded-xl bg-green-50 border border-green-200 hover:bg-green-100 flex items-center justify-center transition-colors"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          window.open(`tel:${voter.mobile_number}`)
+                        }}
+                      >
+                        <Phone className="h-5 w-5 stroke-green-600" strokeWidth={2} />
+                      </button>
+                    )}
+                    {!isViewOnly && !voter.has_voted && (
+                      <button
+                        type="button"
+                        className="h-12 w-12 rounded-xl bg-blue-50 border border-blue-200 hover:bg-blue-100 flex items-center justify-center transition-colors"
+                        onClick={(e) => handleQuickVote(voter, e)}
+                      >
+                        <CheckCircle className="h-5 w-5 stroke-blue-600" strokeWidth={2} />
+                      </button>
+                    )}
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -357,12 +373,18 @@ export default function VoterEntry() {
 
       {/* Edit Dialog */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto [&>button]:hidden">
+          <div className="flex items-center justify-between">
             <DialogTitle>
               #{selectedVoter?.serial_no} - {selectedVoter?.name}
             </DialogTitle>
-          </DialogHeader>
+            <button
+              onClick={() => setEditDialogOpen(false)}
+              className="p-2 rounded-lg border opacity-70 hover:opacity-100 hover:bg-muted transition-all"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
           {selectedVoter && (
             <div className="space-y-6 py-4">
               {/* Voter Info */}
@@ -374,129 +396,144 @@ export default function VoterEntry() {
                 <p><strong>SEC ID:</strong> {selectedVoter.sec_id}</p>
               </div>
 
-              {/* Political Leaning */}
-              <div className="space-y-3">
-                <Label className="text-base font-semibold">Political Leaning</Label>
-                <div className="grid grid-cols-3 gap-2">
-                  {['UDF', 'LDF', 'NDA', 'Other', 'Neutral'].map((option) => {
-                    const isSelected = editedVoter.political_leaning === option
-                    return (
-                      <button
-                        key={option}
-                        type="button"
-                        onClick={() => handleEditChange('political_leaning', isSelected ? null : option)}
-                        className={cn(
-                          "relative flex items-center justify-center px-3 py-3 border-2 rounded-lg cursor-pointer transition-all font-medium",
-                          isSelected ? [
-                            "ring-2 ring-offset-2",
-                            option === 'UDF' && "bg-green-100 border-green-500 text-green-700 ring-green-500",
-                            option === 'LDF' && "bg-red-100 border-red-500 text-red-700 ring-red-500",
-                            option === 'NDA' && "bg-orange-100 border-orange-500 text-orange-700 ring-orange-500",
-                            option === 'Other' && "bg-purple-100 border-purple-500 text-purple-700 ring-purple-500",
-                            option === 'Neutral' && "bg-gray-100 border-gray-500 text-gray-700 ring-gray-500",
-                          ] : [
-                            "border-gray-200 hover:border-gray-300 bg-white",
-                            option === 'UDF' && "hover:bg-green-50 text-green-600",
-                            option === 'LDF' && "hover:bg-red-50 text-red-600",
-                            option === 'NDA' && "hover:bg-orange-50 text-orange-600",
-                            option === 'Other' && "hover:bg-purple-50 text-purple-600",
-                            option === 'Neutral' && "hover:bg-gray-50 text-gray-600",
-                          ]
-                        )}
-                      >
-                        {isSelected && (
-                          <Check className="absolute top-1 right-1 h-4 w-4" />
-                        )}
-                        {option}
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
+              {!isViewOnly && (
+                <>
+                  {/* Political Leaning */}
+                  <div className="space-y-3">
+                    <Label className="text-base font-semibold">Political Leaning</Label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {['UDF', 'LDF', 'NDA', 'Other', 'Neutral'].map((option) => {
+                        const isSelected = editedVoter.political_leaning === option
+                        return (
+                          <button
+                            key={option}
+                            type="button"
+                            onClick={() => handleEditChange('political_leaning', isSelected ? null : option)}
+                            className={cn(
+                              "relative flex items-center justify-center px-3 py-3 border-2 rounded-lg cursor-pointer transition-all font-medium",
+                              isSelected ? [
+                                "ring-2 ring-offset-2",
+                                option === 'UDF' && "bg-green-100 border-green-500 text-green-700 ring-green-500",
+                                option === 'LDF' && "bg-red-100 border-red-500 text-red-700 ring-red-500",
+                                option === 'NDA' && "bg-orange-100 border-orange-500 text-orange-700 ring-orange-500",
+                                option === 'Other' && "bg-purple-100 border-purple-500 text-purple-700 ring-purple-500",
+                                option === 'Neutral' && "bg-gray-100 border-gray-500 text-gray-700 ring-gray-500",
+                              ] : [
+                                "border-gray-200 hover:border-gray-300 bg-white",
+                                option === 'UDF' && "hover:bg-green-50 text-green-600",
+                                option === 'LDF' && "hover:bg-red-50 text-red-600",
+                                option === 'NDA' && "hover:bg-orange-50 text-orange-600",
+                                option === 'Other' && "hover:bg-purple-50 text-purple-600",
+                                option === 'Neutral' && "hover:bg-gray-50 text-gray-600",
+                              ]
+                            )}
+                          >
+                            {isSelected && (
+                              <Check className="absolute top-1 right-1 h-4 w-4" />
+                            )}
+                            {option}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
 
-              {/* Mobile Number */}
-              <div className="space-y-2">
-                <Label className="text-base font-semibold">Mobile Number</Label>
-                <div className="flex gap-2">
-                  <Input
-                    type="tel"
-                    placeholder="Enter mobile number"
-                    value={editedVoter.mobile_number || ''}
-                    onChange={(e) => handleEditChange('mobile_number', e.target.value || null)}
-                    className="h-12"
-                  />
-                  {editedVoter.mobile_number && (
+                  {/* Mobile Number */}
+                  <div className="space-y-2">
+                    <Label className="text-base font-semibold">Mobile Number</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        type="tel"
+                        placeholder="Enter mobile number"
+                        value={editedVoter.mobile_number || ''}
+                        onChange={(e) => handleEditChange('mobile_number', e.target.value || null)}
+                        className="h-12"
+                      />
+                      {editedVoter.mobile_number && (
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="h-12 w-12"
+                          onClick={() => window.open(`tel:${editedVoter.mobile_number}`)}
+                        >
+                          <Phone className="h-5 w-5" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Toggles */}
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between py-3 border-b">
+                      <div className="flex items-center gap-2">
+                        <Plane className="h-5 w-5 text-yellow-600" />
+                        <Label className="text-base">വിദേശത്ത്</Label>
+                      </div>
+                      <Switch
+                        checked={editedVoter.is_abroad ?? false}
+                        onCheckedChange={(checked) => handleEditChange('is_abroad', checked)}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between py-3 border-b">
+                      <div className="flex items-center gap-2">
+                        <Skull className="h-5 w-5 text-gray-600" />
+                        <Label className="text-base">മരണപ്പെട്ടു</Label>
+                      </div>
+                      <Switch
+                        checked={editedVoter.is_deceased ?? false}
+                        onCheckedChange={(checked) => handleEditChange('is_deceased', checked)}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Add to Group Button */}
+                  <Button
+                    variant="outline"
+                    size="lg"
+                    className="w-full"
+                    onClick={() => setGroupDialogVoter(selectedVoter)}
+                  >
+                    <Users className="h-5 w-5 mr-2" />
+                    Add to Group
+                  </Button>
+
+                  {/* Voted Button */}
+                  <Button
+                    variant={editedVoter.has_voted ? 'success' : 'outline'}
+                    size="xl"
+                    className="w-full"
+                    onClick={() => handleEditChange('has_voted', !editedVoter.has_voted)}
+                  >
+                    <CheckCircle className={cn("h-6 w-6 mr-2", editedVoter.has_voted && "fill-current")} />
+                    {editedVoter.has_voted ? 'VOTED' : 'Mark as VOTED'}
+                  </Button>
+
+                  {/* Save/Discard Buttons */}
+                  <div className="flex gap-2 pt-4 border-t">
                     <Button
                       variant="outline"
-                      size="icon"
-                      className="h-12 w-12"
-                      onClick={() => window.open(`tel:${editedVoter.mobile_number}`)}
+                      className="flex-1"
+                      onClick={handleDiscardChanges}
+                      disabled={!hasChanges || saving}
                     >
-                      <Phone className="h-5 w-5" />
+                      <X className="h-4 w-4 mr-2" />
+                      Discard
                     </Button>
-                  )}
-                </div>
-              </div>
-
-              {/* Toggles */}
-              <div className="space-y-4">
-                <div className="flex items-center justify-between py-3 border-b">
-                  <div className="flex items-center gap-2">
-                    <Plane className="h-5 w-5 text-yellow-600" />
-                    <Label className="text-base">വിദേശത്ത്</Label>
+                    <Button
+                      className="flex-1"
+                      onClick={handleSaveChanges}
+                      disabled={!hasChanges || saving}
+                    >
+                      {saving ? (
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <Save className="h-4 w-4 mr-2" />
+                      )}
+                      {saving ? 'Saving...' : 'Save Changes'}
+                    </Button>
                   </div>
-                  <Switch
-                    checked={editedVoter.is_abroad ?? false}
-                    onCheckedChange={(checked) => handleEditChange('is_abroad', checked)}
-                  />
-                </div>
-                <div className="flex items-center justify-between py-3 border-b">
-                  <div className="flex items-center gap-2">
-                    <Skull className="h-5 w-5 text-gray-600" />
-                    <Label className="text-base">മരണപ്പെട്ടു</Label>
-                  </div>
-                  <Switch
-                    checked={editedVoter.is_deceased ?? false}
-                    onCheckedChange={(checked) => handleEditChange('is_deceased', checked)}
-                  />
-                </div>
-              </div>
-
-              {/* Voted Button */}
-              <Button
-                variant={editedVoter.has_voted ? 'success' : 'outline'}
-                size="xl"
-                className="w-full"
-                onClick={() => handleEditChange('has_voted', !editedVoter.has_voted)}
-              >
-                <CheckCircle className={cn("h-6 w-6 mr-2", editedVoter.has_voted && "fill-current")} />
-                {editedVoter.has_voted ? 'VOTED' : 'Mark as VOTED'}
-              </Button>
-
-              {/* Save/Discard Buttons */}
-              <div className="flex gap-2 pt-4 border-t">
-                <Button
-                  variant="outline"
-                  className="flex-1"
-                  onClick={handleDiscardChanges}
-                  disabled={!hasChanges || saving}
-                >
-                  <X className="h-4 w-4 mr-2" />
-                  Discard
-                </Button>
-                <Button
-                  className="flex-1"
-                  onClick={handleSaveChanges}
-                  disabled={!hasChanges || saving}
-                >
-                  {saving ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <Save className="h-4 w-4 mr-2" />
-                  )}
-                  {saving ? 'Saving...' : 'Save Changes'}
-                </Button>
-              </div>
+                </>
+              )}
             </div>
           )}
         </DialogContent>
@@ -563,6 +600,39 @@ export default function VoterEntry() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Vote Confirmation Dialog */}
+      <Dialog open={!!voteConfirmVoter} onOpenChange={(open) => !open && setVoteConfirmVoter(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Confirm Vote</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-center">
+              Mark <strong>#{voteConfirmVoter?.serial_no} - {voteConfirmVoter?.name}</strong> as voted?
+            </p>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setVoteConfirmVoter(null)}>
+              Cancel
+            </Button>
+            <Button onClick={confirmVote} className="bg-green-600 hover:bg-green-700">
+              <Check className="h-4 w-4 mr-2" />
+              Confirm Vote
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add to Group Dialog */}
+      {portalSession && (
+        <AddToGroupDialog
+          voter={groupDialogVoter}
+          wardId={portalSession.ward_id}
+          isOpen={!!groupDialogVoter}
+          onClose={() => setGroupDialogVoter(null)}
+        />
+      )}
     </div>
   )
 }

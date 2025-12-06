@@ -29,6 +29,7 @@ export default function PortalLogin() {
         ward_id: credential.ward_id,
         polling_station_id: credential.polling_station_id,
         is_master: credential.is_master,
+        is_view_only: credential.is_view_only ?? false,
         username: credential.username,
       })
 

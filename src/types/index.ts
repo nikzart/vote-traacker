@@ -40,6 +40,7 @@ export interface WardCredential {
   password_hash: string
   is_master: boolean
   is_active: boolean
+  is_view_only: boolean
   created_at: string
   ward?: Ward
   polling_station?: PollingStation
@@ -118,6 +119,7 @@ export interface PortalSession {
   ward_id: string
   polling_station_id: string | null
   is_master: boolean
+  is_view_only: boolean
   username: string
 }
 

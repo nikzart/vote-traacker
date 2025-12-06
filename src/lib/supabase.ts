@@ -288,3 +288,14 @@ export async function deleteVoterGroup(groupId: string) {
 
   if (error) throw error
 }
+
+export async function getVoterGroupMembership(voterId: string, wardId: string) {
+  const { data, error } = await supabase
+    .from('voter_group_members')
+    .select('*, voter_group:voter_groups!inner(*)')
+    .eq('voter_id', voterId)
+    .eq('voter_group.ward_id', wardId)
+
+  if (error) throw error
+  return data
+}

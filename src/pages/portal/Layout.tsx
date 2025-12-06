@@ -1,12 +1,11 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
-import { Users, UsersRound, Eye, LogOut } from 'lucide-react'
+import { Users, UsersRound, LogOut } from 'lucide-react'
 import { useAuthStore } from '@/stores/authStore'
 import { cn } from '@/lib/utils'
 
 const navItems = [
   { path: '/portal', icon: Users, label: 'Voters', end: true },
   { path: '/portal/groups', icon: UsersRound, label: 'Groups' },
-  { path: '/portal/readonly', icon: Eye, label: 'View Only' },
 ]
 
 export default function PortalLayout() {
@@ -28,6 +27,7 @@ export default function PortalLayout() {
             <p className="text-xs text-muted-foreground truncate max-w-[200px]">
               {portalSession?.username}
               {portalSession?.is_master && ' (Master)'}
+              {portalSession?.is_view_only && ' (View Only)'}
             </p>
           </div>
           <button

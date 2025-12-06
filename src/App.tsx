@@ -14,7 +14,6 @@ import PortalLayout from '@/pages/portal/Layout'
 import PortalLogin from '@/pages/portal/Login'
 import VoterEntry from '@/pages/portal/VoterEntry'
 import Groups from '@/pages/portal/Groups'
-import ReadOnly from '@/pages/portal/ReadOnly'
 
 // Auth guards
 import { useAuthStore } from '@/stores/authStore'
@@ -70,7 +69,6 @@ function App() {
         >
           <Route index element={<VoterEntry />} />
           <Route path="groups" element={<Groups />} />
-          <Route path="readonly" element={<ReadOnly />} />
         </Route>
 
         {/* 404 */}
