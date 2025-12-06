@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import type { Session } from '@supabase/supabase-js'
 import type { PortalSession } from '@/types'
 
 interface AuthState {
@@ -8,10 +9,10 @@ interface AuthState {
   setPortalSession: (session: PortalSession | null) => void
   clearPortalSession: () => void
 
-  // Admin auth (for Admin Dashboard)
-  adminEmail: string | null
+  // Admin auth (for Admin Dashboard - Supabase Auth)
+  adminSession: Session | null
   isAdminLoggedIn: boolean
-  setAdminAuth: (email: string) => void
+  setAdminSession: (session: Session | null) => void
   clearAdminAuth: () => void
 }
 
@@ -24,17 +25,19 @@ export const useAuthStore = create<AuthState>()(
       clearPortalSession: () => set({ portalSession: null }),
 
       // Admin auth
-      adminEmail: null,
+      adminSession: null,
       isAdminLoggedIn: false,
-      setAdminAuth: (email) => set({ adminEmail: email, isAdminLoggedIn: true }),
-      clearAdminAuth: () => set({ adminEmail: null, isAdminLoggedIn: false }),
+      setAdminSession: (session) => set({
+        adminSession: session,
+        isAdminLoggedIn: !!session
+      }),
+      clearAdminAuth: () => set({ adminSession: null, isAdminLoggedIn: false }),
     }),
     {
       name: 'vote-tracker-auth',
       partialize: (state) => ({
         portalSession: state.portalSession,
-        adminEmail: state.adminEmail,
-        isAdminLoggedIn: state.isAdminLoggedIn,
+        // Don't persist admin session - Supabase handles it
       }),
     }
   )

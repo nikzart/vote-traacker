@@ -1,5 +1,7 @@
+import { useEffect } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from '@/components/ui/toast'
+import { supabase } from '@/lib/supabase'
 
 // Admin pages
 import AdminLayout from '@/pages/admin/Layout'
@@ -35,6 +37,23 @@ function PortalProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function App() {
+  const { setAdminSession } = useAuthStore()
+
+  // Initialize Supabase auth listener
+  useEffect(() => {
+    // Get initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setAdminSession(session)
+    })
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setAdminSession(session)
+    })
+
+    return () => subscription.unsubscribe()
+  }, [setAdminSession])
+
   return (
     <>
       <Routes>

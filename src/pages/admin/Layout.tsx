@@ -12,6 +12,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { useAuthStore } from '@/stores/authStore'
 import { useUIStore } from '@/stores/uiStore'
+import { signOutAdmin } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 
 const navItems = [
@@ -23,10 +24,11 @@ const navItems = [
 
 export default function AdminLayout() {
   const navigate = useNavigate()
-  const { clearAdminAuth, adminEmail } = useAuthStore()
+  const { clearAdminAuth, adminSession } = useAuthStore()
   const { sidebarOpen, toggleSidebar } = useUIStore()
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await signOutAdmin()
     clearAdminAuth()
     navigate('/admin/login')
   }
@@ -85,7 +87,7 @@ export default function AdminLayout() {
         <div className="absolute bottom-0 left-0 right-0 p-4 border-t bg-white">
           <div className="flex items-center justify-between">
             <div className="text-sm">
-              <p className="font-medium truncate">{adminEmail}</p>
+              <p className="font-medium truncate">{adminSession?.user?.email}</p>
               <p className="text-muted-foreground">Admin</p>
             </div>
             <Button variant="ghost" size="icon" onClick={handleLogout}>

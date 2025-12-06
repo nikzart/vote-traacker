@@ -5,12 +5,10 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { useAuthStore } from '@/stores/authStore'
-import { supabase } from '@/lib/supabase'
+import { signInAdmin } from '@/lib/supabase'
 
 export default function AdminLogin() {
   const navigate = useNavigate()
-  const { setAdminAuth } = useAuthStore()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -22,29 +20,11 @@ export default function AdminLogin() {
     setLoading(true)
 
     try {
-      // Check admin credentials
-      const { data, error: dbError } = await supabase
-        .from('admin_users')
-        .select('*')
-        .eq('email', email)
-        .single()
-
-      if (dbError || !data) {
-        setError('Invalid email or password')
-        setLoading(false)
-        return
-      }
-
-      if (data.password_hash !== password) {
-        setError('Invalid email or password')
-        setLoading(false)
-        return
-      }
-
-      setAdminAuth(email)
+      await signInAdmin(email, password)
       navigate('/admin')
-    } catch {
-      setError('An error occurred. Please try again.')
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'An error occurred'
+      setError(message === 'Invalid login credentials' ? 'Invalid email or password' : message)
     } finally {
       setLoading(false)
     }
@@ -102,9 +82,6 @@ export default function AdminLogin() {
               )}
             </Button>
           </form>
-          <div className="mt-4 text-center text-sm text-muted-foreground">
-            <p>Default: admin@votetracker.com / admin123</p>
-          </div>
         </CardContent>
       </Card>
     </div>
